@@ -2653,6 +2653,8 @@ export interface DesktopApi {
   /// Headless export mode: report the export outcome so the main process can quit.
   headlessExportDone(result: { ok: boolean; error?: string }): void
   getAiSettings(): Promise<AiSettings>
+  /** fires after global AI settings are saved elsewhere; reload then */
+  onAiSettingsChanged(handler: () => void): () => void
   setAiSettings(settings: AiSettings): Promise<void>
   aiChat(request: AiChatRequest): Promise<AiChatResponse>
   /// start a streaming AI call; deltas arrive via onAiStream with the same requestId

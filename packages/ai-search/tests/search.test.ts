@@ -228,9 +228,9 @@ describe('webSearch (SearchOptions)', () => {
 describe('search-tools', () => {
   it('maps the settings block onto SearchOptions', () => {
     const base = defaultAiSettings()
-    expect(searchOptionsFromSettings(base)).toEqual({ useGsk: true })
-    expect(searchOptionsFromSettings({ ...base, gskToolsEnabled: false })).toEqual({
-      useGsk: false,
+    expect(searchOptionsFromSettings(base)).toEqual({ useGsk: false }) // cloud tools default off in this fork (gsk dormant)
+    expect(searchOptionsFromSettings({ ...base, gskToolsEnabled: true })).toEqual({
+      useGsk: true,
     })
     const serper = {
       ...base,
@@ -252,9 +252,10 @@ describe('search-tools', () => {
       tavilyKey: 't',
       prefer: 'tavily',
     })
-    // no key → genspark chain
+    // no usable key → falls back to the (gated) gsk chain
     const empty = {
       ...base,
+      gskToolsEnabled: true,
       search: {
         provider: 'serper' as const,
         providers: { serper: { apiKey: '' }, tavily: { apiKey: '' } },

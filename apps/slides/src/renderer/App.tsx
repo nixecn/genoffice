@@ -1184,6 +1184,11 @@ export function App() {
 
   useEffect(() => {
     void window.slidesApi.getAiSettings().then(setAiSettings)
+    // global AI settings saved in the settings window → reload live
+    const off = window.slidesApi.onAiSettingsChanged?.(() => {
+      void window.slidesApi.getAiSettings().then(setAiSettings)
+    })
+    return () => off?.()
   }, [])
 
   // Recent files for the start screen

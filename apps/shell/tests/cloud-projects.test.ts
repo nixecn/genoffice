@@ -30,12 +30,19 @@ const PROJECTS = [
 describe('cloud projects store account binding', () => {
   let dir: string
   let storePath: string
-  const envBefore = { key: process.env.GSK_API_KEY, disable: process.env.AI_SEARCH_DISABLE_GSK }
+  const envBefore = {
+    key: process.env.GSK_API_KEY,
+    disable: process.env.AI_SEARCH_DISABLE_GSK,
+    enable: process.env.GENOFFICE_ENABLE_GSK_TOOLS,
+  }
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'cloud-store-'))
     storePath = join(dir, 'cloud-projects.json')
     delete process.env.AI_SEARCH_DISABLE_GSK
+    // the gsk backends are opt-in in this fork; these tests exercise the
+    // (dormant-by-default) cloud store binding, so opt in for the run
+    process.env.GENOFFICE_ENABLE_GSK_TOOLS = '1'
     process.env.GSK_API_KEY = 'test-key-account-a'
   })
 
@@ -45,6 +52,8 @@ describe('cloud projects store account binding', () => {
     else process.env.GSK_API_KEY = envBefore.key
     if (envBefore.disable === undefined) delete process.env.AI_SEARCH_DISABLE_GSK
     else process.env.AI_SEARCH_DISABLE_GSK = envBefore.disable
+    if (envBefore.enable === undefined) delete process.env.GENOFFICE_ENABLE_GSK_TOOLS
+    else process.env.GENOFFICE_ENABLE_GSK_TOOLS = envBefore.enable
   })
 
   const writeStore = (owner: string) => {
@@ -92,7 +101,11 @@ describe('cloud projects store account binding', () => {
 describe('cloud projects sync account isolation', () => {
   let dir: string
   let storePath: string
-  const envBefore = { key: process.env.GSK_API_KEY, disable: process.env.AI_SEARCH_DISABLE_GSK }
+  const envBefore = {
+    key: process.env.GSK_API_KEY,
+    disable: process.env.AI_SEARCH_DISABLE_GSK,
+    enable: process.env.GENOFFICE_ENABLE_GSK_TOOLS,
+  }
 
   const pageFor = (title: string): GskPastProjectsPage => ({
     projects: [
@@ -112,6 +125,9 @@ describe('cloud projects sync account isolation', () => {
     dir = mkdtempSync(join(tmpdir(), 'cloud-sync-'))
     storePath = join(dir, 'cloud-projects.json')
     delete process.env.AI_SEARCH_DISABLE_GSK
+    // the gsk backends are opt-in in this fork; these tests exercise the
+    // (dormant-by-default) cloud store binding, so opt in for the run
+    process.env.GENOFFICE_ENABLE_GSK_TOOLS = '1'
     process.env.GSK_API_KEY = 'test-key-account-a'
     listMock.mockReset()
   })
@@ -122,6 +138,8 @@ describe('cloud projects sync account isolation', () => {
     else process.env.GSK_API_KEY = envBefore.key
     if (envBefore.disable === undefined) delete process.env.AI_SEARCH_DISABLE_GSK
     else process.env.AI_SEARCH_DISABLE_GSK = envBefore.disable
+    if (envBefore.enable === undefined) delete process.env.GENOFFICE_ENABLE_GSK_TOOLS
+    else process.env.GENOFFICE_ENABLE_GSK_TOOLS = envBefore.enable
   })
 
   it('writes the store bound to the account that synced', async () => {

@@ -18,20 +18,8 @@ export const MINIMAX_BASE_URL = 'https://api.minimax.io/v1'
 // Model ids verified against vendor docs 2026-09; keep chat-capable analysis
 // models in step with the chat catalog in providers.ts.
 export const AI_MEDIA_PROVIDERS: AiMediaProviderMeta[] = [
-  {
-    id: 'genspark',
-    label: 'Genspark',
-    description: 'Image generation, media analysis and search through your Genspark sign-in',
-    keyPlaceholder: 'Not required - sign in to Genspark',
-    defaultBaseUrl: '',
-    imageProtocol: 'openai-images',
-    imageModels: [],
-    defaultImageModel: '',
-    analysisProtocol: 'openai-chat',
-    analysisModels: [],
-    defaultAnalysisModel: '',
-    videoAnalysis: true,
-  },
+  // The upstream "genspark" media entry (image gen / media analysis through the
+  // gsk login) was removed — configure a BYOK provider or the custom endpoint.
   {
     id: 'openai',
     label: 'OpenAI',
@@ -183,9 +171,11 @@ export function defaultAiMediaSettings(): AiMediaSettings {
     }
   }
   return {
-    imageProvider: 'genspark',
-    analysisProvider: 'genspark',
-    videoAnalysisProvider: 'genspark',
+    // the gsk (Genspark) route is disabled in this fork — default to the
+    // user-configured "custom" endpoint (unusable until filled in the UI)
+    imageProvider: 'custom',
+    analysisProvider: 'custom',
+    videoAnalysisProvider: 'custom',
     providers,
   }
 }

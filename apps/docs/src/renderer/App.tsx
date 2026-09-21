@@ -1242,6 +1242,11 @@ export function App() {
   useEffect(() => {
     void window.desktop.getRecentFiles().then(setRecent)
     void window.desktop.getAiSettings().then(setSettings)
+    // global AI settings saved in the settings window → reload live, no restart
+    const off = window.desktop.onAiSettingsChanged?.(() => {
+      void window.desktop.getAiSettings().then(setSettings)
+    })
+    return () => off?.()
   }, [])
 
   useEffect(() => {

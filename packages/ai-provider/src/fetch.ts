@@ -54,7 +54,28 @@ function isBlockPage(response: Response): boolean {
   )
 }
 
+/**
+ * Hard guard: this fork must never talk to the upstream Genspark backend. Any
+ * AI request aimed at a genspark.ai host is refused before a socket is opened —
+ * the removed gsk login/proxy code can no longer be reached through the
+ * provider layer, and a stray future call site fails loudly instead of
+ * silently leaking traffic.
+ */
+function isGensparkHost(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.toLowerCase()
+    return host === 'genspark.ai' || host.endsWith('.genspark.ai')
+  } catch {
+    return false
+  }
+}
+
 export async function aiFetch(url: string, rawInit: RequestInit): Promise<Response> {
+  if (isGensparkHost(url)) {
+    throw new Error(
+      `[genoffice-fork] Refused AI request to ${url}: requests to genspark.ai are disabled in this build.`,
+    )
+  }
   const init = withUserAgent(rawInit)
   const signal = init.signal as AbortSignal | null | undefined
   let response: Response

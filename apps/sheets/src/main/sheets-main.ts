@@ -26,6 +26,7 @@ import {
   shell,
   systemPreferences,
   WebContentsView,
+  webContents,
 } from 'electron'
 import type {
   IpcMainInvokeEvent,
@@ -83,14 +84,11 @@ import {
   sheetCsvToXlsxBuffer,
 } from '@genoffice/xlsx-gateway/gateway/csv-import'
 import {
-  ensureGenofficeLogin,
-  gskApiKey,
-  gskLoginInfo,
-  hasGskAuth,
   setGskProxyUrl,
   webSearchTool,
   imageSearchTool,
   generateImageTool,
+  LOCAL_MOCK_EMAIL,
 } from '@genoffice/ai-search'
 import { parseFileToText } from '@genoffice/file-parse'
 import type { CellEdit, SheetStructuralOps } from '@genoffice/xlsx-gateway/gateway/xlsx-gateway'
@@ -3249,46 +3247,46 @@ export function registerSheetsAiIpc(): void {
     sessionFor(event)
     const stored = readJson<Partial<AiSettings> & LegacyAiSettings>(SETTINGS_PATH(), {})
     const settings = resolveAiSettings(stored, defaultAiSettings())
-    // a stored BYOK provider is honored when usable; half-filled configs fall back to genspark
+    // a stored BYOK provider is honored when usable; anything else (including
+    // the removed 'genspark' id) falls back to the hardcoded OpenAI-compatible default
     settings.provider = activeProvider(settings)
     return settings
   })
 
-  // Genspark account (gsk login state): the auth source for AI features; the
-  // frontend uses it to guide sign-in when logged out
+  // Account status: always the local mock session (the Genspark gsk login was
+  // removed). Returning loggedIn:true keeps the AI panel past its login gate.
   ipcMain.handle(
     IPC_CHANNELS.aiGskStatus,
     async (_event, withEmail?: unknown): Promise<GenSparkAccountStatus> => {
-      if (!hasGskAuth()) return { loggedIn: false }
-      if (!withEmail) return { loggedIn: true }
-      const info = await gskLoginInfo()
-      return info?.email ? { loggedIn: true, email: info.email } : { loggedIn: true }
+      return withEmail ? { loggedIn: true, email: LOCAL_MOCK_EMAIL } : { loggedIn: true }
     },
   )
 
+  // Login is a no-op in this fork; the channel stays registered for the renderer.
   ipcMain.handle(IPC_CHANNELS.aiGskLogin, () => {
-    ensureGenofficeLogin((url) => void shell.openExternal(url))
+    /* no-op: no login flow in this build */
   })
 
   ipcMain.handle(IPC_CHANNELS.aiSetSettings, (event, input: unknown) => {
     sessionFor(event)
     const settings = aiSettingsInputSchema.parse(input)
     writeJson(SETTINGS_PATH(), settings)
+    // Hot-refresh: notify every renderer (including this app's
+    // WebContentsView children) so already-open workbooks use the new global
+    // AI settings immediately (upstream only wrote the file).
+    for (const wc of webContents.getAllWebContents()) {
+      if (!wc.isDestroyed()) wc.send('ai:settings-changed')
+    }
   })
 
   ipcMain.handle(IPC_CHANNELS.aiChat, async (event, input: unknown) => {
     sessionFor(event)
     const request = aiChatRequestSchema.parse(input)
     const provider = request.settings.provider as AiProviderId
-    let config = request.settings.providers[provider]
-    if (provider === 'genspark' && config && !config.apiKey) {
-      config = { ...config, apiKey: gskApiKey() }
-    }
-    if (!config || (provider !== 'codex' && !config.apiKey)) {
-      return {
-        ok: false,
-        error: provider === 'genspark' ? tm('errGskNotLoggedIn') : tm('errNoApiKey', { provider }),
-      }
+    const config = request.settings.providers[provider]
+    // custom (OpenAI-compatible local servers) may run without a key, like codex
+    if (!config || (provider !== 'codex' && provider !== 'custom' && !config.apiKey)) {
+      return { ok: false, error: tm('errNoApiKey', { provider }) }
     }
     if (provider !== 'codex' && !config.model) return { ok: false, error: tm('errNoModel') }
     try {
@@ -3311,21 +3309,13 @@ export function registerSheetsAiIpc(): void {
     const tools = request.tools ?? []
     const maxTokens = request.maxTokens ?? maxOutputTokensOf(request.settings)
     const provider = request.settings.provider as AiProviderId
-    let config = request.settings.providers[provider]
-    // Genspark's key never enters the settings file; it is read from the gsk
-    // login state per request
-    if (provider === 'genspark' && config && !config.apiKey) {
-      config = { ...config, apiKey: gskApiKey() }
-    }
+    const config = request.settings.providers[provider]
     const send = (chunk: AiStreamChunk) => {
       if (!event.sender.isDestroyed()) event.sender.send(IPC_CHANNELS.aiStreamChunk, chunk)
     }
-    if (!config || (provider !== 'codex' && !config.apiKey)) {
-      send({
-        requestId,
-        type: 'error',
-        error: provider === 'genspark' ? tm('errGskNotLoggedIn') : tm('errNoApiKey', { provider }),
-      })
+    // custom (OpenAI-compatible local servers) may run without a key, like codex
+    if (!config || (provider !== 'codex' && provider !== 'custom' && !config.apiKey)) {
+      send({ requestId, type: 'error', error: tm('errNoApiKey', { provider }) })
       return
     }
     if (provider !== 'codex' && !config.model) {

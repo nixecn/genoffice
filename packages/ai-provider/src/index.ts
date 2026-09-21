@@ -23,13 +23,14 @@ export type {
 export {
   AI_PROVIDERS,
   DEFAULT_MAX_OUTPUT_TOKENS,
-  GENSPARK_LLM_BASE_URLS,
+  DEFAULT_OPENAI_COMPATIBLE,
   MAX_MAX_OUTPUT_TOKENS,
   MIN_MAX_OUTPUT_TOKENS,
   activeProvider,
   clampMaxOutputTokens,
   cloudToolsEnabled,
   defaultAiSettings,
+  defaultOpenAiCompatibleConfig,
   maxOutputTokensOf,
   resolveAiSettings,
 } from './providers'

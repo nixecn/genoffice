@@ -38,11 +38,13 @@ function openaiSettings(apiKey = 'sk-test', imageModel = 'gpt-image-2'): AiSetti
 }
 
 describe('media settings', () => {
-  it('defaults every provider to its default models and genspark as the active one', () => {
+  it('defaults every provider to its default models and the custom endpoint as the active one', () => {
     const media = defaultAiMediaSettings()
-    expect(media.imageProvider).toBe('genspark')
-    expect(media.analysisProvider).toBe('genspark')
-    expect(media.videoAnalysisProvider).toBe('genspark')
+    // the gsk (Genspark) media route is removed; the default is the
+    // user-configured custom endpoint (unusable until filled in)
+    expect(media.imageProvider).toBe('custom')
+    expect(media.analysisProvider).toBe('custom')
+    expect(media.videoAnalysisProvider).toBe('custom')
     for (const meta of AI_MEDIA_PROVIDERS) {
       expect(media.providers[meta.id].imageModel).toBe(meta.defaultImageModel)
       expect(media.providers[meta.id].apiKey).toBe('')
@@ -53,9 +55,9 @@ describe('media settings', () => {
 
   it('is carried by defaultAiSettings and healed in from a pre-media settings file', () => {
     const defaults = defaultAiSettings()
-    expect(defaults.media?.imageProvider).toBe('genspark')
+    expect(defaults.media?.imageProvider).toBe('custom')
     const resolved = resolveAiSettings(
-      { provider: 'genspark', providers: defaults.providers },
+      { provider: 'custom', providers: defaults.providers },
       defaultAiSettings(),
     )
     expect(resolved.media).toEqual(defaultAiMediaSettings())
@@ -102,7 +104,8 @@ describe('media settings', () => {
     expect(activeMediaProvider(withMedia(custom), 'image')).toBe('genspark')
     custom.providers.custom.baseUrl = 'http://localhost:1234/v1'
     expect(activeMediaProvider(withMedia(custom), 'image')).toBe('custom')
-    expect(activeMediaProvider(withMedia(custom), 'analysis')).toBe('genspark')
+    // the custom endpoint also carries an analysis protocol, so it activates there too
+    expect(activeMediaProvider(withMedia(custom), 'analysis')).toBe('custom')
     expect(activeMediaConfig(withMedia(custom), 'image')?.provider).toBe('custom')
     // MiniMax has no analysis endpoint: picking it for analysis falls back
     const mm = defaultAiMediaSettings()
@@ -123,11 +126,11 @@ describe('media settings', () => {
   })
 
   it('gates the tools on gsk login + toggle without BYOK, and on the BYOK model with it', () => {
-    const genspark = defaultAiSettings()
-    expect(imageGenerationAvailable(genspark, true)).toBe(true)
-    expect(imageGenerationAvailable(genspark, false)).toBe(false)
-    expect(imageGenerationAvailable({ ...genspark, gskToolsEnabled: false }, true)).toBe(false)
-    expect(mediaAnalysisAvailable({ ...genspark, gskToolsEnabled: false }, true)).toBe(false)
+    // fresh defaults carry an unconfigured custom media endpoint → unavailable
+    // even when a (mock) login is reported; the gsk route is dormant in this fork
+    const fresh = defaultAiSettings()
+    expect(imageGenerationAvailable(fresh, true)).toBe(false)
+    expect(mediaAnalysisAvailable(fresh, false)).toBe(false)
 
     const byok = openaiSettings()
     expect(imageGenerationAvailable(byok, false)).toBe(true)

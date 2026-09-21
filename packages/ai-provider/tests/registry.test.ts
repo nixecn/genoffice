@@ -6,7 +6,7 @@ import {
   modelHasFixedSampling,
   modelLacksVision,
 } from '../src/registry'
-import { AI_PROVIDERS, GENSPARK_LLM_BASE_URLS } from '../src/providers'
+import { AI_PROVIDERS } from '../src/providers'
 import type { AiProviderConfig, AiProviderId } from '../src/types'
 
 function config(model: string, baseUrl?: string): AiProviderConfig {
@@ -21,18 +21,8 @@ describe('provider registry', () => {
     expect(Object.keys(AI_PROVIDER_ADAPTERS).sort()).toEqual(AI_PROVIDERS.map((m) => m.id).sort())
   })
 
-  it('routes genspark by model id prefix onto the two proxy endpoints', () => {
-    const resolve = (model: string) => AI_PROVIDER_ADAPTERS.genspark.resolveEndpoint(config(model))
-    expect(resolve('claude-opus-4-7')).toEqual({
-      protocol: 'anthropic',
-      baseUrl: GENSPARK_LLM_BASE_URLS.anthropic,
-    })
-    // gpt-5.x fixes sampling, so the proxy's OpenAI route also drops temperature
-    expect(resolve('gpt-5.2')).toEqual({
-      protocol: 'openai-compatible',
-      baseUrl: GENSPARK_LLM_BASE_URLS.openai,
-      omitTemperature: true,
-    })
+  it('no longer registers the removed genspark proxy adapter', () => {
+    expect('genspark' in AI_PROVIDER_ADAPTERS).toBe(false)
   })
 
   it('resolves direct providers to their official endpoints', () => {
@@ -229,11 +219,9 @@ describe('provider registry', () => {
     )
   })
 
-  it('only genspark authenticates through the gsk login', () => {
+  it('every adapter authenticates by API key except the Codex CLI bridge', () => {
     for (const [id, adapter] of Object.entries(AI_PROVIDER_ADAPTERS)) {
-      expect(adapter.capabilities.auth).toBe(
-        id === 'genspark' ? 'gsk-login' : id === 'codex' ? 'codex-chatgpt' : 'api-key',
-      )
+      expect(adapter.capabilities.auth).toBe(id === 'codex' ? 'codex-chatgpt' : 'api-key')
     }
   })
 

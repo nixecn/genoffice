@@ -1641,8 +1641,12 @@ export function registerSlidesIpc(): void {
   })
   // ── Cloud single-page generation (gsk slide_generate): brief → cloud HTML+conversion → one-slide
   // pptx saved to a temp file. Returns a marker string that slides:land-generated-pages redeems for
-  // the bytes. Enabled when gsk is logged in; GENOFFICE_CLOUD_SLIDE=0 is the kill switch.
-  const cloudSlideEnabled = () => process.env.GENOFFICE_CLOUD_SLIDE !== '0' && !!gskApiKey()
+  // the bytes. DISABLED in this fork: the cloud route talks to genspark.ai. Double opt-in
+  // (GENOFFICE_ENABLE_GSK_TOOLS=1 plus a GSK_API_KEY) re-enables it for private testing.
+  const cloudSlideEnabled = () =>
+    process.env.GENOFFICE_ENABLE_GSK_TOOLS === '1' &&
+    process.env.GENOFFICE_CLOUD_SLIDE !== '0' &&
+    !!gskApiKey()
 
   ipcMain.handle('slides:cloud-gen-status', () => ({ enabled: cloudSlideEnabled() }))
 

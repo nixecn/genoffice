@@ -1,7 +1,6 @@
 import type { AgentMessage, AgentToolCall, AgentToolDef } from '@genoffice/agent-core'
 
 export type AiProviderId =
-  | 'genspark'
   | 'codex'
   | 'anthropic'
   | 'gemini'
@@ -21,7 +20,11 @@ export type AiProviderId =
   | 'opencode-go'
   | 'custom'
 
-/** Genspark account status (gsk login state; the sole auth source for AI features) */
+/**
+ * Account status shown in the shell UI. The upstream Genspark (gsk) login was
+ * removed: this is now a fixed local session mock, always reported as
+ * signed-in so no login window or device-code flow ever appears.
+ */
 export interface GenSparkAccountStatus {
   loggedIn: boolean
   email?: string

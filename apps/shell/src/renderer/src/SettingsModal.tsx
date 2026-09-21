@@ -289,14 +289,9 @@ function AiModelPane({ t }: { t: TFunc }) {
     let alive = true
     void window.aiOffice.getAiSettings?.().then((s) => {
       if (!alive || !s) return
-      // The switch is disabled with genspark, so never present it stranded
-      // off. Display-only: s.provider may be the activeProvider fallback for
-      // a half-configured BYOK selection, so writing anything back here would
-      // clobber the stored choice — the main process heals a genuine legacy
-      // genspark+off file itself, judged on the raw stored provider.
-      if (s.provider === 'genspark' && s.gskToolsEnabled === false) {
-        s = { ...s, gskToolsEnabled: true }
-      }
+      // Display-only: s.provider may be the activeProvider fallback for a
+      // half-configured BYOK selection, so writing anything back here would
+      // clobber the stored choice.
       setSettings(s)
       const codex = s.providers.codex
       if (codex) {
@@ -317,7 +312,6 @@ function AiModelPane({ t }: { t: TFunc }) {
     baseUrl: undefined,
     cliPath: undefined,
   }
-  const isGenspark = provider === 'genspark'
   const isCodex = provider === 'codex'
 
   const touch = () => {
@@ -342,12 +336,7 @@ function AiModelPane({ t }: { t: TFunc }) {
     touch()
   }
   const selectProvider = (id: AiSettings['provider']) => {
-    // cloud tools cannot be off with genspark (chat runs through gsk anyway)
-    setSettings({
-      ...settings,
-      provider: id,
-      ...(id === 'genspark' ? { gskToolsEnabled: true } : {}),
-    })
+    setSettings({ ...settings, provider: id })
     touch()
   }
   const save = () => {
@@ -403,7 +392,7 @@ function AiModelPane({ t }: { t: TFunc }) {
         />
       </div>
       <div className="set-field-desc set-ai-note">
-        {isGenspark ? t('setAiGensparkHint') : isCodex ? t('setAiCodexHint') : t('setAiByokNote')}
+        {isCodex ? t('setAiCodexHint') : t('setAiByokNote')}
       </div>
       <div className="set-field">
         <div className="set-field-text">
@@ -454,7 +443,7 @@ function AiModelPane({ t }: { t: TFunc }) {
             }}
           />
         </div>
-      ) : !isGenspark ? (
+      ) : (
         <>
           <div className="set-field">
             <div className="set-field-text">
@@ -498,7 +487,7 @@ function AiModelPane({ t }: { t: TFunc }) {
             />
           </div>
         </>
-      ) : null}
+      )}
       <div className="set-field">
         <div className="set-field-text">
           <div className="set-field-stack">
@@ -527,17 +516,13 @@ function AiModelPane({ t }: { t: TFunc }) {
             <div className="set-field-desc">{t('setAiGskToolsDesc')}</div>
           </div>
         </div>
-        {/* locked on with the genspark provider — chat runs through gsk anyway */}
+        {/* the gsk cloud tools are dormant in this fork (no Genspark login) */}
         <button
           className="set-switch"
           role="switch"
-          aria-checked={settings.gskToolsEnabled !== false}
+          aria-checked={false}
           aria-label={t('setAiGskTools')}
-          disabled={isGenspark}
-          onClick={() => {
-            setSettings({ ...settings, gskToolsEnabled: settings.gskToolsEnabled === false })
-            touch()
-          }}
+          disabled
         />
       </div>
       <div className="set-pane-footer">
@@ -1346,8 +1331,8 @@ export function SettingsModal({
                   label={t('setGithub')}
                   value={
                     githubStars === null
-                      ? 'github.com/genspark-ai/genoffice'
-                      : `github.com/genspark-ai/genoffice · ★ ${formatStars(githubStars)}`
+                      ? 'github.com/nixecn/genoffice'
+                      : `github.com/nixecn/genoffice · ★ ${formatStars(githubStars)}`
                   }
                   action={
                     <button

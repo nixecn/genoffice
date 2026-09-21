@@ -1541,6 +1541,8 @@ export interface SlidesApi {
   /** The file was renamed externally (shell Home list rename) — pushes the new path, the renderer updates the title bar */
   onRenamed: (handler: (newPath: string) => void) => () => void
   getAiSettings: () => Promise<AiSettings>
+  /** fires after global AI settings are saved elsewhere; reload then */
+  onAiSettingsChanged: (handler: () => void) => () => void
   setAiSettings: (settings: AiSettings) => Promise<void>
   aiStream: (request: AiStreamRequest) => Promise<void>
   aiStreamCancel: (requestId: string) => Promise<void>

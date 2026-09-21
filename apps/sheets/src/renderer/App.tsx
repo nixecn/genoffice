@@ -1313,10 +1313,9 @@ export function App(): React.JSX.Element {
     if (!settings) return false
     const config = settings.providers[settings.provider]
     if (!config?.model) return false
-    // Genspark's key never lands in the settings file; the main process injects
-    // it from the gsk login state. When logged out, requests return an error
-    // guiding sign-in — not intercepted here.
-    return settings.provider === 'genspark' || !!config.apiKey
+    // codex brings its own login; custom (OpenAI-compatible local servers) may
+    // run without a key. Missing keys surface as request errors downstream.
+    return settings.provider === 'codex' || settings.provider === 'custom' || !!config.apiKey
   }
 
   /** Image attachments read as base64 and sent multimodal with this user message
@@ -1480,6 +1479,11 @@ export function App(): React.JSX.Element {
 
   useEffect(() => {
     void window.desktopApi.getAiSettings().then(setAiSettingsState)
+    // global AI settings saved in the settings window → reload live
+    const off = window.desktopApi.onAiSettingsChanged?.(() => {
+      void window.desktopApi.getAiSettings().then(setAiSettingsState)
+    })
+    return () => off?.()
   }, [])
 
   useEffect(() => {

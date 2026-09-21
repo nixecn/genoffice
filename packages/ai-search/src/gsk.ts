@@ -99,9 +99,12 @@ export function gskApiKey(): string {
 
 /**
  * Whether gsk is usable (CLI installed and logged in / has a key). Callers use this to decide fallback.
- * Set AI_SEARCH_DISABLE_GSK=1 to force-disable (test isolation / force Serper).
+ * DISABLED BY DEFAULT in this fork: the gsk backends (search/img/media/tool_cli)
+ * all talk to genspark.ai, which must never be contacted. Set
+ * GENOFFICE_ENABLE_GSK_TOOLS=1 to opt back in for private testing.
  */
 export function hasGskAuth(): boolean {
+  if (process.env.GENOFFICE_ENABLE_GSK_TOOLS !== '1') return false
   if (process.env.AI_SEARCH_DISABLE_GSK === '1') return false
   return !!gskApiKey() && resolveGskEntry() !== null
 }

@@ -4,7 +4,7 @@
  * to avoid renderer CORS), search tools, and the slides-only ai:* channels
  * (image generation, media analysis, style templates).
  */
-import { app, ipcMain, nativeImage, net, shell } from 'electron'
+import { app, ipcMain, nativeImage, net, webContents } from 'electron'
 import {
   appendFileSync,
   existsSync,
@@ -39,12 +39,9 @@ import { fetchRemoteImage } from '@genoffice/electron-utils'
 import {
   webSearchTool,
   imageSearchTool,
-  ensureGenofficeLogin,
-  gskApiKey,
   generateImageTool,
   analyzeMediaTool,
-  gskLoginInfo,
-  hasGskAuth,
+  LOCAL_MOCK_EMAIL,
 } from '@genoffice/ai-search'
 import { addPicture, editPictureSrcRect, replacePictureBytes } from '@genoffice/pptx-engine'
 import { matchesElementRef } from '@genoffice/pptx-engine/identity'
@@ -115,23 +112,29 @@ export function registerAiIpc(): void {
     return settings
   })
 
-  // Genspark account (gsk login state): the auth source for AI features; when logged out the frontend uses this to guide login
+  // Account status: always the local mock session (the Genspark gsk login was
+  // removed). Returning loggedIn:true keeps every AI panel past its login gate
+  // so no sign-in window ever appears.
   ipcMain.handle(
     'ai:gsk-status',
     async (_event, withEmail?: boolean): Promise<GenSparkAccountStatus> => {
-      if (!hasGskAuth()) return { loggedIn: false }
-      if (!withEmail) return { loggedIn: true }
-      const info = await gskLoginInfo()
-      return info?.email ? { loggedIn: true, email: info.email } : { loggedIn: true }
+      return withEmail ? { loggedIn: true, email: LOCAL_MOCK_EMAIL } : { loggedIn: true }
     },
   )
 
+  // Login is a no-op in this fork (the local session is always present); the
+  // channel stays registered so preload/renderer callers keep working.
   ipcMain.handle('ai:gsk-login', () => {
-    ensureGenofficeLogin((url) => void shell.openExternal(url))
+    /* no-op: no login flow in this build */
   })
 
   ipcMain.handle('ai:set-settings', (_event, settings: AiSettings) => {
     writeJson(AI_SETTINGS_PATH(), settings)
+    // Hot-refresh: notify every renderer so already-open decks use the new
+    // global AI settings without a restart (see docs-main for rationale).
+    for (const wc of webContents.getAllWebContents()) {
+      if (!wc.isDestroyed()) wc.send('ai:settings-changed')
+    }
   })
 
   ipcMain.handle('ai:log-run-failure', (_event, entry: AiRunFailure) => {
@@ -143,20 +146,13 @@ export function registerAiIpc(): void {
     const tools = request.tools ?? []
     const maxTokens = request.maxTokens ?? maxOutputTokensOf(settings)
     const provider = settings.provider
-    let config = settings.providers?.[provider]
-    // The genspark key never enters the settings file; it is fetched from the gsk login state per request
-    if (provider === 'genspark' && config && !config.apiKey) {
-      config = { ...config, apiKey: gskApiKey() }
-    }
+    const config = settings.providers?.[provider]
     const send = (chunk: AiStreamChunk) => {
       if (!event.sender.isDestroyed()) event.sender.send('ai:stream-chunk', chunk)
     }
-    if (!config || (provider !== 'codex' && !config.apiKey)) {
-      send({
-        requestId,
-        type: 'error',
-        error: provider === 'genspark' ? tm('errGskNotLoggedIn') : tm('errNoApiKey', { provider }),
-      })
+    // custom (OpenAI-compatible local servers) may run without a key, like codex
+    if (!config || (provider !== 'codex' && provider !== 'custom' && !config.apiKey)) {
+      send({ requestId, type: 'error', error: tm('errNoApiKey', { provider }) })
       return
     }
     if (provider !== 'codex' && !config.model) {

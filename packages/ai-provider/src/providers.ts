@@ -1,28 +1,38 @@
 import { defaultAiMediaSettings, resolveAiMediaSettings } from './media'
 import { defaultAiSearchSettings, resolveAiSearchSettings } from './search-settings'
-import type { AiProviderId, AiProviderMeta, AiSettings, LegacyAiSettings } from './types'
+import type {
+  AiProviderConfig,
+  AiProviderId,
+  AiProviderMeta,
+  AiSettings,
+  LegacyAiSettings,
+} from './types'
 
 /**
- * Genspark server-side LLM proxy endpoints. All three protocols share the
- * api_key from the gsk login; model ids follow the proxy's own naming scheme,
- * which differs from the official vendor ids.
+ * Hardcoded default for the OpenAI-compatible ("custom") provider, so the app
+ * works out of the box against a local/self-hosted endpoint without touching
+ * the settings UI. Every value can be overridden with an environment variable
+ * (picked up once at module load, before any request goes out):
+ *
+ *   GENOFFICE_AI_BASE_URL  e.g. http://127.0.0.1:8000/v1  (vLLM/Ollama/LiteLLM/OneAPI...)
+ *   GENOFFICE_AI_API_KEY   sent as `Authorization: Bearer <key>` ('' = anonymous)
+ *   GENOFFICE_AI_MODEL     the model id the downstream endpoint serves
+ *
+ * NOTE: the downstream model MUST support OpenAI function calling (`tools` /
+ * `tool_calls`), otherwise the agent loop cannot execute any tool.
  */
-export const GENSPARK_LLM_BASE_URLS = {
-  anthropic: 'https://www.genspark.ai/api/anthropic',
-  openai: 'https://www.genspark.ai/api/llm_proxy/v1',
+export const DEFAULT_OPENAI_COMPATIBLE = {
+  baseUrl: process.env.GENOFFICE_AI_BASE_URL || 'http://127.0.0.1:8000/v1',
+  apiKey: process.env.GENOFFICE_AI_API_KEY || '',
+  model: process.env.GENOFFICE_AI_MODEL || 'qwen2.5-32b-instruct',
 } as const
 
-/**
- * Splits GenOffice usage out of the proxy's default "Claw" billing bucket
- * (the backend attributes gsk-key traffic by X-Agent-Type). Only sent to the
- * Genspark proxy — never to direct vendor APIs.
- */
-export const GENSPARK_AGENT_TYPE = 'genoffice'
-
-export function gensparkAttributionHeaders(baseUrl?: string): Record<string, string> {
-  return baseUrl?.startsWith('https://www.genspark.ai')
-    ? { 'X-Agent-Type': GENSPARK_AGENT_TYPE }
-    : {}
+export function defaultOpenAiCompatibleConfig(): AiProviderConfig {
+  return {
+    apiKey: DEFAULT_OPENAI_COMPATIBLE.apiKey,
+    model: DEFAULT_OPENAI_COMPATIBLE.model,
+    baseUrl: DEFAULT_OPENAI_COMPATIBLE.baseUrl,
+  }
 }
 
 /**
@@ -40,26 +50,9 @@ export function opencodeSessionHeaders(
 }
 
 export const AI_PROVIDERS: AiProviderMeta[] = [
-  {
-    id: 'genspark',
-    label: 'Genspark',
-    // must stay within the proxy's served set (GET /api/llm_proxy/v1/models);
-    // bare gpt-5.6 and the gemini family dropped off it (verified 2026-08-31).
-    // DeepSeek goes by the proxy's hyphenated pool id; V4.1 Flash takes images
-    // (live-verified 2026-09-15). gpt-6-astra: chat, tool call and image
-    // input all live-verified through the proxy 2026-09-17
-    models: [
-      'claude-opus-4-7',
-      'claude-opus-4-8',
-      'claude-sonnet-4-6',
-      'gpt-6-astra',
-      'gpt-5.6-terra',
-      'gpt-5.6-luna',
-      'deep-seek-v4.1-flash',
-    ],
-    defaultModel: 'claude-opus-4-7',
-    keyPlaceholder: 'Not required - sign in to Genspark',
-  },
+  // The upstream "genspark" provider (genspark.ai LLM proxy behind the gsk
+  // login) was removed — every AI request now routes to a user-configured
+  // OpenAI-compatible endpoint ("custom" below) or a direct vendor key.
   {
     id: 'codex',
     label: 'Codex CLI',
@@ -287,19 +280,20 @@ export const AI_PROVIDERS: AiProviderMeta[] = [
   },
   {
     id: 'custom',
-    label: 'Custom',
+    label: 'OpenAI Compatible',
     models: [],
+    // empty default lets the settings picker stay on "type your own id"; the
+    // hardcoded DEFAULT_OPENAI_COMPATIBLE.model fills the actual default config
     defaultModel: '',
-    keyPlaceholder: 'API Key',
+    keyPlaceholder: 'API Key (optional for local servers)',
     needsBaseUrl: true,
   },
 ]
 
 /**
- * Fresh settings with every provider's default model and an empty key,
- * except providers listed in `defaultApiKeys` (e.g. an app-specific
- * preconfigured Anthropic key). Callers own that policy; this package
- * has no hardcoded keys.
+ * Fresh settings. The active provider defaults to the OpenAI-compatible
+ * "custom" slot pre-filled from DEFAULT_OPENAI_COMPATIBLE (env-overridable),
+ * so a fresh install talks to the configured local endpoint immediately.
  */
 export function defaultAiSettings(
   defaultApiKeys?: Partial<Record<AiProviderId, string>>,
@@ -313,10 +307,11 @@ export function defaultAiSettings(
       cliPath: meta.needsCliPath ? '' : undefined,
     }
   }
+  providers.custom = defaultOpenAiCompatibleConfig()
   return {
-    provider: 'genspark',
+    provider: 'custom',
     providers,
-    gskToolsEnabled: true,
+    gskToolsEnabled: false,
     media: defaultAiMediaSettings(),
     search: defaultAiSearchSettings(),
   }
@@ -329,29 +324,28 @@ export function cloudToolsEnabled(settings: Pick<AiSettings, 'gskToolsEnabled'>)
 
 /**
  * The stored provider selection is honored only when its config is usable
- * (api-key providers need a key and a model id; custom also needs a base URL).
- * Codex can auto-discover its executable. Anything else — including unknown
- * ids from a hand-edited
- * settings file — falls back to genspark, so a half-filled setup degrades
- * to the signed-in default instead of silently disabling AI.
+ * (api-key providers need a key and a model id; custom needs a base URL and a
+ * model id). Codex can auto-discover its executable. Anything else — including
+ * unknown ids, the removed 'genspark' id from an old settings file, or a
+ * half-filled setup — falls back to the hardcoded OpenAI-compatible default
+ * instead of silently disabling AI.
  */
 export function activeProvider(settings: AiSettings): AiProviderId {
   const provider = settings.provider
-  if (provider === 'genspark') return 'genspark'
   const meta = AI_PROVIDERS.find((m) => m.id === provider)
   const config = settings.providers?.[provider]
-  if (!meta || !config) return 'genspark'
+  if (!meta || !config) return 'custom'
   if (meta.needsCliPath) return provider
   // Trim-aware: in-memory settings bypass the trimConfigs applied to
   // persisted files, and a whitespace-only key/URL/model is a 401, not a config.
-  if (!config.model?.trim()) return 'genspark'
+  if (!config.model?.trim()) return 'custom'
   if (meta.needsBaseUrl) {
     // Custom OpenAI-compatible endpoints (Ollama, LM Studio, vLLM) accept
     // anonymous requests: base URL + model suffice, the key stays optional.
-    if (!config.baseUrl?.trim()) return 'genspark'
+    if (!config.baseUrl?.trim()) return 'custom'
     return provider
   }
-  if (!config.apiKey?.trim()) return 'genspark'
+  if (!config.apiKey?.trim()) return 'custom'
   return provider
 }
 
@@ -363,23 +357,13 @@ export function activeProvider(settings: AiSettings): AiProviderId {
 const RETIRED_MODELS: Partial<Record<AiProviderId, Record<string, string>>> = {
   // chat/reasoner retired 2026-07-24 (thinking became a request parameter);
   // V4 Flash and V4 Flash Vision Exp retired 2026-09-10 in favour of V4.1
-  // Flash, which carries vision natively. The Genspark pool spelling is
-  // accepted too: the vendor API 400s on it (verified 2026-09-16)
+  // Flash, which carries vision natively.
   deepseek: {
     'deepseek-chat': 'deepseek-flash',
     'deepseek-reasoner': 'deepseek-flash',
     'deepseek-v4-flash': 'deepseek-flash',
     'deepseek-v4-flash-vision-exp': 'deepseek-flash',
     'deep-seek-v4.1-flash': 'deepseek-flash',
-  },
-  // proxy stopped serving bare gpt-5.6 (400) and removed the gemini route
-  // entirely (405), verified 2026-08-31; gemini selections fall back to the
-  // provider default since no gemini id is served at all
-  genspark: {
-    'gpt-5.6': 'gpt-5.6-terra',
-    'gemini-3.1-pro-preview': 'claude-opus-4-7',
-    'gemini-3-flash-preview': 'claude-opus-4-7',
-    'gemini-3.7-flash': 'claude-opus-4-7',
   },
 }
 

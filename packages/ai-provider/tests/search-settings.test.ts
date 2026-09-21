@@ -14,7 +14,7 @@ describe('search settings', () => {
     })
     expect(defaultAiSettings().search?.provider).toBe('genspark')
     const resolved = resolveAiSettings(
-      { provider: 'genspark', providers: {} as never },
+      { provider: 'custom', providers: {} as never },
       defaultAiSettings(),
     )
     expect(resolved.search).toEqual(defaultAiSearchSettings())
