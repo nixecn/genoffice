@@ -74,8 +74,14 @@ if (winArm64 && !process.env.ELECTRON_BUILDER_7Z_FILTER) {
   process.env.ELECTRON_BUILDER_7Z_FILTER = 'BCJ'
 }
 const winArch = winArm64 ? 'arm64' : 'x64'
-const winSidecarTarget = winArm64 ? 'aarch64-pc-windows-msvc' : 'x86_64-pc-windows-gnu'
-const WIN_SIDECAR = `../sheets/native/xlsx-engine/target/${winSidecarTarget}/release/xlsx-sidecar.exe`
+// Fork: use the locally built sidecar from the default cargo target dir
+// (`native:build` without --target → target/release), not the upstream GNU
+// triple subdir — no extra `cargo build --target` needed.
+const winSidecarTargetDir = winArm64 ? 'aarch64-pc-windows-msvc' : '.'
+const WIN_SIDECAR =
+  winSidecarTargetDir === '.'
+    ? '../sheets/native/xlsx-engine/target/release/xlsx-sidecar.exe'
+    : `../sheets/native/xlsx-engine/target/${winSidecarTargetDir}/release/xlsx-sidecar.exe`
 
 // The gsk CLI tree below is copied verbatim from node_modules, and the
 // nested commander path depends on npm's current hoisting layout — fail the
@@ -142,6 +148,10 @@ if (process.platform === 'darwin' && !existsSync(join(__dirname, VISION_OCR_HELP
 // and Windows installers must not silently ship without it.
 const WIN_OCR_HELPER = '../../packages/pdf2docx/ocr-helper/win-ocr.exe'
 if (process.platform === 'win32' && !existsSync(join(__dirname, WIN_OCR_HELPER))) {
+  // Best-effort, not a hard gate: compiling the helper needs the Windows SDK
+  // (Windows.winmd). On a machine without it, warn and continue — electron-builder
+  // skips the absent extraResource and scanned-PDF OCR degrades to the bitmap
+  // fallback. Set GENOFFICE_REQUIRE_WIN_OCR=1 to restore the strict behavior.
   try {
     execFileSync(
       process.execPath,
@@ -149,7 +159,13 @@ if (process.platform === 'win32' && !existsSync(join(__dirname, WIN_OCR_HELPER))
       { stdio: 'inherit' },
     )
   } catch (err) {
-    throw new Error(`win-ocr helper compile failed: ${err}`, { cause: err })
+    if (process.env.GENOFFICE_REQUIRE_WIN_OCR === '1') {
+      throw new Error(`win-ocr helper compile failed: ${err}`, { cause: err })
+    }
+    console.warn(
+      '[electron-builder] win-ocr helper not built (Windows SDK missing); ' +
+        'scanned-PDF OCR will be unavailable. Continue packaging.',
+    )
   }
 }
 

@@ -1,4 +1,6 @@
 ocr-helper/vision-ocr
 ocr-helper/vision-ocr.arm64
 ocr-helper/vision-ocr.x86_64
-ocr-helper/win-ocr.exe
+# Fork: commit the prebuilt win-ocr.exe so packaging needs no Windows SDK.
+# The line above (upstream) ignores it as a build artifact; force-include it.
+!ocr-helper/win-ocr.exe
